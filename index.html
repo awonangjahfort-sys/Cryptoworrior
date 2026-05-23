@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CryptoWarriors — Tap & Battle</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #FFD700;
+    --gold2: #FFA500;
+    --cyan: #00F5FF;
+    --purple: #8B2BE2;
+    --red: #FF2244;
+    --green: #00FF88;
+    --bg: #0A0A1A;
+    --panel: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:#fff; font-family:'Rajdhani',sans-serif; }
+
+  /* ── STARFIELD ── */
+  #stars { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .star { position:absolute; border-radius:50%; background:#fff; animation:twinkle linear infinite; }
+  @keyframes twinkle { 0%,100%{opacity:.2;transform:scale(1)} 50%{opacity:1;transform:scale(1.4)} }
+
+  /* ── SCREENS ── */
+  .screen { position:fixed; inset:0; z-index:10; display:none; flex-direction:column; }
+  .screen.active { display:flex; }
+
+  /* ── NAV ── */
+  #nav {
+    position:fixed; bottom:0; left:0; right:0; z-index:100;
+    display:flex; background:rgba(10,10,26,.95);
+    border-top:1px solid var(--border);
+    backdrop-filter:blur(20px);
+  }
+  .nav-btn {
+    flex:1; padding:10px 0 8px; display:flex; flex-direction:column; align-items:center;
+    gap:3px; font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:600;
+    letter-spacing:.05em; color:rgba(255,255,255,.4); cursor:pointer;
+    transition:color .2s; border:none; background:none;
+    position:relative; overflow:hidden;
+  }
+  .nav-btn .icon { font-size:22px; line-height:1; transition:transform .2s; }
+  .nav-btn.active { color:var(--gold); }
+  .nav-btn.active .icon { transform:scale(1.15); }
+  .nav-btn::after { content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:0; height:2px; background:var(--gold); transition:width .2s; border-radius:2px; }
+  .nav-btn.active::after { width:60%; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    position:fixed; top:0; left:0; right:0; z-index:99;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; background:rgba(10,10,26,.9);
+    border-bottom:1px solid var(--border); backdrop-filter:blur(20px);
+  }
+  #topbar .logo { font-family:'Orbitron',sans-serif; font-size:13px; font-weight:900; letter-spacing:.1em; color:var(--gold); }
+  #topbar .coins { display:flex; align-items:center; gap:6px; font-family:'Orbitron',sans-serif; font-size:14px; font-weight:700; color:var(--gold); }
+  #topbar .coins span { font-size:20px; }
+
+  /* content area */
+  .content { margin-top:56px; margin-bottom:70px; flex:1; overflow-y:auto; }
+
+  /* ═══════════════════════════════════
+     TAP SCREEN
+  ═══════════════════════════════════ */
+  #tap-screen {
+    align-items:center; justify-content:flex-start;
+    background:radial-gradient(ellipse at 50% 30%, rgba(139,43,226,.15) 0%, transparent 70%);
+  }
+  #tap-screen .content { display:flex; flex-direction:column; align-items:center; padding:20px 16px; width:100%; }
+
+  .warrior-stats {
+    width:100%; display:flex; justify-content:space-between;
+    gap:10px; margin-bottom:20px;
+  }
+  .stat-box {
+    flex:1; background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:10px 12px; text-align:center;
+  }
+  .stat-box .label { font-size:10px; letter-spacing:.1em; color:rgba(255,255,255,.4); text-transform:uppercase; }
+  .stat-box .val { font-family:'Orbitron',sans-serif; font-size:16px; font-weight:700; color:var(--cyan); margin-top:2px; }
+
+  /* Hero orb */
+  #hero-orb-wrap { position:relative; width:220px; height:220px; margin:10px 0; }
+  #hero-orb {
+    width:220px; height:220px; border-radius:50%;
+    background:radial-gradient(circle at 38% 35%, #b06aff 0%, #5a0fa8 45%, #1a003a 100%);
+    box-shadow:0 0 40px rgba(139,43,226,.6), 0 0 80px rgba(139,43,226,.3), inset 0 0 40px rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center;
+    font-size:80px; cursor:pointer; user-select:none;
+    transition:transform .08s, box-shadow .08s;
+    position:relative; z-index:2;
+    animation:pulse-orb 3s ease-in-out infinite;
+  }
+  @keyframes pulse-orb { 0%,100%{box-shadow:0 0 40px rgba(139,43,226,.6),0 0 80px rgba(139,43,226,.3),inset 0 0 40px rgba(0,0,0,.5)} 50%{box-shadow:0 0 60px rgba(139,43,226,.9),0 0 120px rgba(139,43,226,.5),inset 0 0 40px rgba(0,0,0,.5)} }
+  #hero-orb:active { transform:scale(.93); box-shadow:0 0 20px rgba(139,43,226,.4),inset 0 0 40px rgba(0,0,0,.6); }
+  .orb-ring {
+    position:absolute; inset:-8px; border-radius:50%;
+    border:2px solid transparent;
+    background:conic-gradient(from 0deg, var(--gold), var(--purple), var(--cyan), var(--gold)) border-box;
+    -webkit-mask:linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite:destination-out; mask-composite:exclude;
+    animation:spin 4s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  .tap-label { font-family:'Orbitron',sans-serif; font-size:11px; letter-spacing:.2em; color:rgba(255,255,255,.3); margin-top:4px; }
+  .per-tap { font-family:'Orbitron',sans-serif; font-size:13px; color:var(--gold); margin-top:2px; }
+
+  /* Energy bar */
+  .energy-wrap { width:100%; margin-top:16px; }
+  .energy-label { display:flex; justify-content:space-between; font-size:12px; color:rgba(255,255,255,.4); margin-bottom:6px; }
+  .energy-track { width:100%; height:10px; background:rgba(255,255,255,.07); border-radius:99px; overflow:hidden; }
+  .energy-fill {
+    height:100%; border-radius:99px;
+    background:linear-gradient(90deg, #00c2ff, #00ff88);
+    transition:width .3s; box-shadow:0 0 10px rgba(0,245,255,.5);
+  }
+
+  /* Upgrades */
+  .section-title { font-family:'Orbitron',sans-serif; font-size:11px; font-weight:700; letter-spacing:.15em; color:var(--gold); text-transform:uppercase; margin:20px 0 12px; align-self:flex-start; }
+  .upgrades { width:100%; display:flex; flex-direction:column; gap:10px; }
+  .upgrade-card {
+    display:flex; align-items:center; gap:12px;
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:14px; padding:12px 14px; cursor:pointer;
+    transition:border-color .2s, background .2s;
+  }
+  .upgrade-card:hover { border-color:rgba(255,215,0,.3); background:rgba(255,215,0,.05); }
+  .upgrade-card .ico { font-size:28px; }
+  .upgrade-card .info { flex:1; }
+  .upgrade-card .uname { font-weight:700; font-size:15px; }
+  .upgrade-card .udesc { font-size:12px; color:rgba(255,255,255,.4); }
+  .upgrade-card .uprice {
+    font-family:'Orbitron',sans-serif; font-size:13px; color:var(--gold);
+    background:rgba(255,215,0,.1); border:1px solid rgba(255,215,0,.2);
+    padding:5px 10px; border-radius:8px; white-space:nowrap;
+    font-weight:700;
+  }
+  .upgrade-card.maxed .uprice { color:var(--green); border-color:rgba(0,255,136,.3); background:rgba(0,255,136,.1); }
+
+  /* Float coins */
+  .float-coin {
+    position:fixed; font-family:'Orbitron',sans-serif; font-weight:700;
+    font-size:20px; color:var(--gold); pointer-events:none; z-index:999;
+    text-shadow:0 0 10px var(--gold); animation:floatUp .9s ease-out forwards;
+  }
+  @keyframes floatUp { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-80px) scale(1.3)} }
+
+  /* ═══════════════════════════════════
+     BATTLE SCREEN
+  ═══════════════════════════════════ */
+  #battle-screen { background:#0A0A1A; }
+  #battle-screen .content { padding:0; overflow:hidden; }
+
+  #game-canvas { display:block; width:100%; }
+
+  .battle-hud {
+    position:absolute; top:56px; left:0; right:0;
+    padding:10px 14px; display:flex; justify-content:space-between; align-items:center;
+    pointer-events:none; z-index:50;
+  }
+  .hud-hp { display:flex; flex-direction:column; gap:4px; min-width:120px; }
+  .hud-hp .hud-name { font-family:'Orbitron',sans-serif; font-size:10px; letter-spacing:.1em; }
+  .hp-bar { height:10px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; position:relative; }
+  .hp-fill { height:100%; border-radius:99px; transition:width .3s; }
+  .player-hp .hp-fill { background:linear-gradient(90deg,#00ff88,#00c2ff); box-shadow:0 0 8px rgba(0,255,136,.5); }
+  .enemy-hp .hp-fill { background:linear-gradient(90deg,#ff4466,#ff8800); box-shadow:0 0 8px rgba(255,68,102,.5); }
+  .hud-hp .hp-text { font-size:11px; color:rgba(255,255,255,.5); }
+
+  .battle-round {
+    font-family:'Orbitron',sans-serif; font-size:11px; font-weight:700;
+    color:var(--gold); letter-spacing:.15em; text-align:center;
+  }
+
+  /* Controls */
+  #battle-controls {
+    position:fixed; bottom:70px; left:0; right:0;
+    display:flex; gap:10px; padding:12px 16px;
+    background:rgba(10,10,26,.9); border-top:1px solid var(--border);
+    z-index:50;
+  }
+  .battle-btn {
+    flex:1; padding:14px 8px; border-radius:12px; border:none; cursor:pointer;
+    font-family:'Orbitron',sans-serif; font-size:11px; font-weight:700; letter-spacing:.08em;
+    color:#fff; transition:transform .1s, box-shadow .1s; display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  .battle-btn:active { transform:scale(.93); }
+  .battle-btn .bico { font-size:22px; }
+  .btn-attack { background:linear-gradient(135deg,#cc0033,#ff2244); box-shadow:0 4px 20px rgba(255,34,68,.4); }
+  .btn-skill  { background:linear-gradient(135deg,#5a0fa8,#8B2BE2); box-shadow:0 4px 20px rgba(139,43,226,.4); }
+  .btn-heal   { background:linear-gradient(135deg,#007744,#00ff88); box-shadow:0 4px 20px rgba(0,255,136,.3); }
+  .btn-flee   { background:rgba(255,255,255,.06); border:1px solid var(--border); box-shadow:none; color:rgba(255,255,255,.5); }
+
+  /* Battle log */
+  #battle-log {
+    position:fixed; bottom:calc(70px + 80px); left:0; right:0;
+    height:50px; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; z-index:48;
+  }
+  #log-text {
+    font-size:13px; font-weight:700; color:var(--gold); letter-spacing:.05em;
+    text-shadow:0 0 10px rgba(255,215,0,.5); text-align:center; padding:0 20px;
+    animation:logPop .3s ease-out;
+  }
+  @keyframes logPop { from{transform:scale(.8);opacity:0} to{transform:scale(1);opacity:1} }
+
+  /* Overlays */
+  .overlay {
+    position:fixed; inset:0; z-index:200;
+    display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.75); backdrop-filter:blur(8px);
+  }
+  .overlay.active { display:flex; }
+  .overlay-box {
+    background:linear-gradient(135deg,#0f0f28,#1a0030);
+    border:1px solid rgba(255,255,255,.1); border-radius:20px;
+    padding:32px 28px; max-width:320px; width:90%; text-align:center;
+  }
+  .overlay-box h2 { font-family:'Orbitron',sans-serif; font-size:22px; font-weight:900; margin-bottom:8px; }
+  .overlay-box p { font-size:14px; color:rgba(255,255,255,.6); margin-bottom:24px; line-height:1.5; }
+  .overlay-box .rew { font-family:'Orbitron',sans-serif; font-size:20px; color:var(--gold); margin-bottom:20px; }
+  .ov-btn {
+    display:inline-block; padding:14px 32px; border-radius:12px; border:none; cursor:pointer;
+    font-family:'Orbitron',sans-serif; font-size:13px; font-weight:700; letter-spacing:.1em; color:#fff;
+    background:linear-gradient(135deg,#8B2BE2,#00c2ff); box-shadow:0 4px 20px rgba(139,43,226,.4);
+    transition:transform .1s;
+  }
+  .ov-btn:active { transform:scale(.95); }
+
+  /* ═══════════════════════════════════
+     LEADERBOARD
+  ═══════════════════════════════════ */
+  #leaderboard-screen { background:#0A0A1A; }
+  #leaderboard-screen .content { padding:16px; }
+  .lb-title { font-family:'Orbitron',sans-serif; font-size:18px; font-weight:900; color:var(--gold); margin-bottom:4px; }
+  .lb-subtitle { font-size:13px; color:rgba(255,255,255,.4); margin-bottom:20px; }
+  .lb-row {
+    display:flex; align-items:center; gap:12px;
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:12px 14px; margin-bottom:8px;
+    transition:border-color .2s;
+  }
+  .lb-row.me { border-color:rgba(255,215,0,.4); background:rgba(255,215,0,.05); }
+  .lb-rank { font-family:'Orbitron',sans-serif; font-size:16px; font-weight:900; width:30px; text-align:center; }
+  .rank-1 { color:var(--gold); }
+  .rank-2 { color:#C0C0C0; }
+  .rank-3 { color:#CD7F32; }
+  .lb-avatar { font-size:28px; }
+  .lb-info { flex:1; }
+  .lb-name { font-weight:700; font-size:15px; }
+  .lb-level { font-size:11px; color:rgba(255,255,255,.4); }
+  .lb-score { font-family:'Orbitron',sans-serif; font-size:13px; color:var(--gold); font-weight:700; }
+
+  /* ═══════════════════════════════════
+     PROFILE
+  ═══════════════════════════════════ */
+  #profile-screen { background:#0A0A1A; }
+  #profile-screen .content { padding:16px; }
+  .profile-hero {
+    display:flex; flex-direction:column; align-items:center;
+    background:linear-gradient(135deg,rgba(139,43,226,.2),rgba(0,194,255,.1));
+    border:1px solid rgba(255,255,255,.08); border-radius:20px;
+    padding:28px 20px; margin-bottom:16px; position:relative; overflow:hidden;
+  }
+  .profile-avatar { font-size:64px; margin-bottom:12px; position:relative; z-index:1; }
+  .profile-name { font-family:'Orbitron',sans-serif; font-size:18px; font-weight:900; margin-bottom:4px; }
+  .profile-level { font-size:13px; color:rgba(255,255,255,.5); margin-bottom:20px; }
+  .profile-stats { display:flex; gap:20px; }
+  .pstat { text-align:center; }
+  .pstat .pval { font-family:'Orbitron',sans-serif; font-size:18px; font-weight:700; color:var(--cyan); }
+  .pstat .plabel { font-size:11px; color:rgba(255,255,255,.4); margin-top:2px; }
+
+  .xp-wrap { width:100%; margin-top:16px; }
+  .xp-track { width:100%; height:8px; background:rgba(255,255,255,.07); border-radius:99px; overflow:hidden; }
+  .xp-fill { height:100%; border-radius:99px; background:linear-gradient(90deg,#8B2BE2,#00F5FF); box-shadow:0 0 10px rgba(139,43,226,.6); transition:width .5s; }
+  .xp-label { display:flex; justify-content:space-between; font-size:11px; color:rgba(255,255,255,.4); margin-top:6px; }
+
+  .achievement-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:16px; }
+  .ach-card {
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:14px 10px; text-align:center;
+  }
+  .ach-card .ach-ico { font-size:28px; margin-bottom:6px; }
+  .ach-card .ach-name { font-size:11px; color:rgba(255,255,255,.5); line-height:1.3; }
+  .ach-card.earned { border-color:rgba(255,215,0,.3); background:rgba(255,215,0,.06); }
+  .ach-card.earned .ach-name { color:var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- Stars -->
+<div id="stars"></div>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div class="logo">⚔️ CryptoWarriors</div>
+  <div class="coins"><span>🪙</span><span id="coin-display">0</span></div>
+</div>
+
+<!-- ════════════════════════════════════
+     TAP SCREEN
+════════════════════════════════════ -->
+<div id="tap-screen" class="screen active">
+  <div class="content">
+    <div class="warrior-stats">
+      <div class="stat-box">
+        <div class="label">Power</div>
+        <div class="val" id="tap-power">1</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Level</div>
+        <div class="val" id="hero-level">1</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Battles Won</div>
+        <div class="val" id="battles-won">0</div>
+      </div>
+    </div>
+
+    <div id="hero-orb-wrap">
+      <div class="orb-ring"></div>
+      <div id="hero-orb">⚔️</div>
+    </div>
+    <div class="tap-label">TAP TO EARN</div>
+    <div class="per-tap">+<span id="per-tap-val">1</span> 🪙 per tap</div>
+
+    <div class="energy-wrap">
+      <div class="energy-label">
+        <span>⚡ Energy</span>
+        <span><span id="energy-val">100</span> / <span id="energy-max">100</span></span>
+      </div>
+      <div class="energy-track"><div class="energy-fill" id="energy-fill" style="width:100%"></div></div>
+    </div>
+
+    <div class="section-title">⚡ Upgrades</div>
+    <div class="upgrades" id="upgrades-list"></div>
+    <div style="height:10px"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     BATTLE SCREEN
+════════════════════════════════════ -->
+<div id="battle-screen" class="screen">
+  <div class="battle-hud">
+    <div class="hud-hp player-hp">
+      <div class="hud-name" style="color:var(--cyan)">⚔️ YOU</div>
+      <div class="hp-bar"><div class="hp-fill" id="player-hp-fill" style="width:100%"></div></div>
+      <div class="hp-text"><span id="player-hp-val">100</span> / <span id="player-hp-max">100</span> HP</div>
+    </div>
+    <div class="battle-round" id="round-display">Round 1</div>
+    <div class="hud-hp enemy-hp" style="text-align:right">
+      <div class="hud-name" style="color:var(--red)">ENEMY 👹</div>
+      <div class="hp-bar"><div class="hp-fill" id="enemy-hp-fill" style="width:100%"></div></div>
+      <div class="hp-text"><span id="enemy-hp-val">80</span> / <span id="enemy-hp-max">80</span> HP</div>
+    </div>
+  </div>
+  <div class="content">
+    <canvas id="game-canvas"></canvas>
+  </div>
+  <div id="battle-log"><div id="log-text">⚔️ Battle begins!</div></div>
+  <div id="battle-controls">
+    <button class="battle-btn btn-attack" onclick="playerAction('attack')"><span class="bico">⚔️</span>ATTACK</button>
+    <button class="battle-btn btn-skill"  onclick="playerAction('skill')"><span class="bico">🔮</span>SKILL</button>
+    <button class="battle-btn btn-heal"   onclick="playerAction('heal')"><span class="bico">💊</span>HEAL</button>
+    <button class="battle-btn btn-flee"   onclick="playerAction('flee')"><span class="bico">🏃</span>FLEE</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     LEADERBOARD SCREEN
+════════════════════════════════════ -->
+<div id="leaderboard-screen" class="screen">
+  <div class="content">
+    <div class="lb-title">🏆 Leaderboard</div>
+    <div class="lb-subtitle">Top Warriors this week</div>
+    <div id="lb-list"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     PROFILE SCREEN
+════════════════════════════════════ -->
+<div id="profile-screen" class="screen">
+  <div class="content">
+    <div class="profile-hero">
+      <div class="profile-avatar">🧙</div>
+      <div class="profile-name" id="profile-name">Warrior</div>
+      <div class="profile-level">Level <span id="profile-level-val">1</span> — <span id="profile-rank">Iron</span></div>
+      <div class="profile-stats">
+        <div class="pstat"><div class="pval" id="pstat-coins">0</div><div class="plabel">Total Coins</div></div>
+        <div class="pstat"><div class="pval" id="pstat-wins">0</div><div class="plabel">Battles Won</div></div>
+        <div class="pstat"><div class="pval" id="pstat-taps">0</div><div class="plabel">Total Taps</div></div>
+      </div>
+      <div class="xp-wrap">
+        <div class="xp-track"><div class="xp-fill" id="xp-fill" style="width:0%"></div></div>
+        <div class="xp-label"><span>XP <span id="xp-val">0</span></span><span>Next Lv: <span id="xp-next">100</span></span></div>
+      </div>
+    </div>
+    <div class="section-title">🏅 Achievements</div>
+    <div class="achievement-grid" id="ach-grid"></div>
+  </div>
+</div>
+
+<!-- ════════════════ OVERLAYS ════════════════ -->
+<div class="overlay" id="win-overlay">
+  <div class="overlay-box">
+    <h2 style="color:var(--gold)">⚔️ VICTORY!</h2>
+    <p>You defeated the enemy warrior!</p>
+    <div class="rew" id="win-reward">+250 🪙 &nbsp; +30 XP</div>
+    <button class="ov-btn" onclick="nextBattle()">Next Battle →</button>
+  </div>
+</div>
+<div class="overlay" id="lose-overlay">
+  <div class="overlay-box">
+    <h2 style="color:var(--red)">💀 DEFEATED</h2>
+    <p>Your warrior has fallen. Collect more coins and try again!</p>
+    <div class="rew">+10 🪙 for your bravery</div>
+    <button class="ov-btn" onclick="retryBattle()">Try Again</button>
+  </div>
+</div>
+
+<!-- NAV -->
+<div id="nav">
+  <button class="nav-btn active" onclick="showScreen('tap','tap-btn')" id="tap-btn"><span class="icon">👆</span>Tap</button>
+  <button class="nav-btn" onclick="showScreen('battle','battle-btn')" id="battle-btn"><span class="icon">⚔️</span>Battle</button>
+  <button class="nav-btn" onclick="showScreen('leaderboard','lb-btn')" id="lb-btn"><span class="icon">🏆</span>Ranks</button>
+  <button class="nav-btn" onclick="showScreen('profile','profile-btn')" id="profile-btn"><span class="icon">🧙</span>Hero</button>
+</div>
+
+<script>
+/* ══════════════════════════════════
+   INIT TELEGRAM
+══════════════════════════════════ */
+const tg = window.Telegram?.WebApp;
+if(tg){ tg.ready(); tg.expand(); tg.setHeaderColor('#0A0A1A'); }
+
+/* ══════════════════════════════════
+   STATE
+══════════════════════════════════ */
+const state = {
+  coins: parseInt(localStorage.getItem('cw_coins')||'0'),
+  tapPower: parseInt(localStorage.getItem('cw_tapPower')||'1'),
+  level: parseInt(localStorage.getItem('cw_level')||'1'),
+  xp: parseInt(localStorage.getItem('cw_xp')||'0'),
+  totalTaps: parseInt(localStorage.getItem('cw_taps')||'0'),
+  battlesWon: parseInt(localStorage.getItem('cw_wins')||'0'),
+  energy: 100, maxEnergy: 100,
+  upgrades: JSON.parse(localStorage.getItem('cw_upgrades')||'{}'),
+  achievements: JSON.parse(localStorage.getItem('cw_achievements')||'{}'),
+};
+
+function saveState(){
+  localStorage.setItem('cw_coins', state.coins);
+  localStorage.setItem('cw_tapPower', state.tapPower);
+  localStorage.setItem('cw_level', state.level);
+  localStorage.setItem('cw_xp', state.xp);
+  localStorage.setItem('cw_taps', state.totalTaps);
+  localStorage.setItem('cw_wins', state.battlesWon);
+  localStorage.setItem('cw_upgrades', JSON.stringify(state.upgrades));
+  localStorage.setItem('cw_achievements', JSON.stringify(state.achievements));
+}
+
+/* ══════════════════════════════════
+   STARS
+══════════════════════════════════ */
+(function(){
+  const c = document.getElementById('stars');
+  for(let i=0;i<60;i++){
+    const s=document.createElement('div'); s.className='star';
+    const sz=Math.random()*2+.5;
+    Object.assign(s.style,{
+      width:sz+'px',height:sz+'px',
+      top:Math.random()*100+'%',left:Math.random()*100+'%',
+      animationDuration:(2+Math.random()*4)+'s',
+      animationDelay:Math.random()*4+'s',
+      opacity:Math.random()*.6+.1
+    });
+    c.appendChild(s);
+  }
+})();
+
+/* ══════════════════════════════════
+   UPGRADES DATA
+══════════════════════════════════ */
+const UPGRADES = [
+  { id:'tap2',    name:'Power Gloves',   desc:'Double tap power',     icon:'🥊', cost:100,  effect:()=>{ state.tapPower+=1; } },
+  { id:'energy2', name:'Energy Crystal', desc:'+50 max energy',       icon:'💎', cost:200,  effect:()=>{ state.maxEnergy+=50; } },
+  { id:'tap3',    name:'Enchanted Blade',desc:'+3 tap power',          icon:'⚡', cost:500,  effect:()=>{ state.tapPower+=3; } },
+  { id:'auto1',   name:'Auto Miner',     desc:'Earn 1 coin/sec auto', icon:'⚙️', cost:1000, effect:()=>{ startAutoMine(1); } },
+  { id:'tap5',    name:'Dragon Fist',    desc:'+5 tap power',         icon:'🐉', cost:2000, effect:()=>{ state.tapPower+=5; } },
+  { id:'auto2',   name:'Golem Army',     desc:'Earn 5 coins/sec',     icon:'🗿', cost:5000, effect:()=>{ startAutoMine(5); } },
+];
+
+let autoMineRate = 0;
+function startAutoMine(rate){ autoMineRate += rate; }
+
+function renderUpgrades(){
+  const list = document.getElementById('upgrades-list');
+  list.innerHTML='';
+  UPGRADES.forEach(u=>{
+    const bought = state.upgrades[u.id];
+    const canAfford = state.coins >= u.cost;
+    const card = document.createElement('div');
+    card.className='upgrade-card'+(bought?' maxed':'');
+    card.innerHTML=`
+      <div class="ico">${u.icon}</div>
+      <div class="info">
+        <div class="uname">${u.name}</div>
+        <div class="udesc">${u.desc}</div>
+      </div>
+      <div class="uprice">${bought ? '✅ OWNED' : '🪙 '+u.cost.toLocaleString()}</div>`;
+    if(!bought){
+      card.style.opacity = canAfford ? '1' : '.5';
+      card.onclick = ()=>{ if(state.coins>=u.cost){ state.coins-=u.cost; state.upgrades[u.id]=true; u.effect(); updateUI(); renderUpgrades(); saveState(); } };
+    }
+    list.appendChild(card);
+  });
+}
+
+/* ══════════════════════════════════
+   TAP MECHANIC
+══════════════════════════════════ */
+document.getElementById('hero-orb').addEventListener('click', e=>{
+  if(state.energy<=0) return;
+  state.energy = Math.max(0, state.energy - 1);
+  state.coins += state.tapPower;
+  state.totalTaps++;
+  gainXP(1);
+  updateUI();
+  spawnFloat(e.clientX, e.clientY, '+'+state.tapPower);
+  saveState();
+  checkAchievements();
+  if(tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+});
+
+function spawnFloat(x,y,text){
+  const el=document.createElement('div'); el.className='float-coin'; el.textContent=text;
+  el.style.left=(x-20)+'px'; el.style.top=(y-30)+'px';
+  document.body.appendChild(el);
+  el.addEventListener('animationend',()=>el.remove());
+}
+
+/* energy regen */
+setInterval(()=>{
+  if(state.energy<state.maxEnergy){ state.energy=Math.min(state.maxEnergy,state.energy+1); updateUI(); }
+},2000);
+
+/* auto mine */
+setInterval(()=>{
+  if(autoMineRate>0){ state.coins+=autoMineRate; updateUI(); saveState(); }
+},1000);
+
+/* ══════════════════════════════════
+   XP & LEVEL
+══════════════════════════════════ */
+function xpForLevel(lv){ return lv*100; }
+function gainXP(amount){
+  state.xp += amount;
+  const needed = xpForLevel(state.level);
+  if(state.xp>=needed){ state.xp-=needed; state.level++; updateUI(); }
+}
+
+/* ══════════════════════════════════
+   UPDATE UI
+══════════════════════════════════ */
+function updateUI(){
+  document.getElementById('coin-display').textContent = state.coins.toLocaleString();
+  document.getElementById('tap-power').textContent = state.tapPower;
+  document.getElementById('hero-level').textContent = state.level;
+  document.getElementById('battles-won').textContent = state.battlesWon;
+  document.getElementById('per-tap-val').textContent = state.tapPower;
+  document.getElementById('energy-val').textContent = state.energy;
+  document.getElementById('energy-max').textContent = state.maxEnergy;
+  document.getElementById('energy-fill').style.width = (state.energy/state.maxEnergy*100)+'%';
+  // profile
+  document.getElementById('pstat-coins').textContent = state.coins.toLocaleString();
+  document.getElementById('pstat-wins').textContent = state.battlesWon;
+  document.getElementById('pstat-taps').textContent = state.totalTaps.toLocaleString();
+  document.getElementById('profile-level-val').textContent = state.level;
+  document.getElementById('xp-val').textContent = state.xp;
+  const nextXP = xpForLevel(state.level);
+  document.getElementById('xp-next').textContent = nextXP;
+  document.getElementById('xp-fill').style.width = (state.xp/nextXP*100)+'%';
+  const ranks=['Iron','Bronze','Silver','Gold','Platinum','Diamond','Legend'];
+  document.getElementById('profile-rank').textContent = ranks[Math.min(state.level-1,ranks.length-1)];
+  const tgUser = tg?.initDataUnsafe?.user;
+  if(tgUser) document.getElementById('profile-name').textContent = tgUser.first_name;
+}
+
+/* ══════════════════════════════════
+   BATTLE ENGINE
+══════════════════════════════════ */
+const battle = {
+  active:false, round:1,
+  player:{ hp:100, maxHp:100, skillCd:0, healCd:0 },
+  enemy:{ hp:80, maxHp:80, atk:12, name:'Shadow Orc' },
+  rewards:0
+};
+
+const ENEMIES = [
+  { name:'Shadow Orc', emoji:'👹', hp:80, atk:10, reward:150, xp:25 },
+  { name:'Undead Knight', emoji:'💀', hp:120, atk:16, reward:250, xp:40 },
+  { name:'Fire Drake', emoji:'🐲', hp:180, atk:22, reward:400, xp:60 },
+  { name:'Demon Lord', emoji:'😈', hp:250, atk:30, reward:600, xp:100 },
+  { name:'Ancient Dragon', emoji:'🐉', hp:350, atk:38, reward:1000, xp:150 },
+];
+
+let currentEnemyIdx = 0;
+
+function initBattle(){
+  const e = ENEMIES[Math.min(currentEnemyIdx, ENEMIES.length-1)];
+  const hpBonus = state.level * 10;
+  battle.player.maxHp = 100 + hpBonus;
+  battle.player.hp = battle.player.maxHp;
+  battle.player.skillCd = 0; battle.player.healCd = 0;
+  battle.enemy.hp = e.hp + (currentEnemyIdx>4 ? (currentEnemyIdx-4)*50 : 0);
+  battle.enemy.maxHp = battle.enemy.hp;
+  battle.enemy.atk = e.atk;
+  battle.enemy.name = e.name;
+  battle.enemy.emoji = e.emoji;
+  battle.rewards = e.reward;
+  battle.active = true;
+  updateBattleUI();
+  setLog('⚔️ '+ e.name + ' challenges you!');
+  renderBattleCanvas();
+}
+
+function updateBattleUI(){
+  document.getElementById('player-hp-fill').style.width=(battle.player.hp/battle.player.maxHp*100)+'%';
+  document.getElementById('enemy-hp-fill').style.width= Math.max(0,battle.enemy.hp/battle.enemy.maxHp*100)+'%';
+  document.getElementById('player-hp-val').textContent=battle.player.hp;
+  document.getElementById('player-hp-max').textContent=battle.player.maxHp;
+  document.getElementById('enemy-hp-val').textContent=Math.max(0,battle.enemy.hp);
+  document.getElementById('enemy-hp-max').textContent=battle.enemy.maxHp;
+  document.getElementById('round-display').textContent='Round '+battle.round;
+  document.getElementById('battles-won').textContent=state.battlesWon;
+}
+
+function setLog(msg){
+  const el=document.getElementById('log-text'); el.textContent=msg;
+  el.style.animation='none'; void el.offsetWidth; el.style.animation='logPop .3s ease-out';
+}
+
+function playerAction(type){
+  if(!battle.active) return;
+  let playerDmg=0, msg='';
+  const baseDmg = Math.max(5, state.tapPower*2 + state.level*3);
+  if(type==='attack'){
+    const crit = Math.random()<.2;
+    playerDmg = Math.floor(baseDmg*(crit?1.8:1)*(0.8+Math.random()*.4));
+    msg=(crit?'💥 CRITICAL! ':'⚔️ You attack! ')+'-'+playerDmg+' HP';
+  } else if(type==='skill'){
+    if(battle.player.skillCd>0){ setLog('🔮 Skill on cooldown! '+battle.player.skillCd+' turns'); return; }
+    playerDmg = Math.floor(baseDmg*2.5);
+    battle.player.skillCd = 3;
+    msg='🔮 Magic Surge! -'+playerDmg+' HP!';
+  } else if(type==='heal'){
+    if(battle.player.healCd>0){ setLog('💊 Heal on cooldown! '+battle.player.healCd+' turns'); return; }
+    const healAmt = Math.floor(battle.player.maxHp*.25);
+    battle.player.hp = Math.min(battle.player.maxHp, battle.player.hp+healAmt);
+    battle.player.healCd = 4;
+    setLog('💊 Healed +'+healAmt+' HP!');
+    enemyTurn();
+    updateBattleUI(); renderBattleCanvas();
+    return;
+  } else if(type==='flee'){
+    battle.active=false;
+    setLog('🏃 You fled the battle!');
+    return;
+  }
+  battle.enemy.hp -= playerDmg;
+  setLog(msg);
+  if(battle.player.skillCd>0) battle.player.skillCd--;
+  if(battle.player.healCd>0)  battle.player.healCd--;
+  if(battle.enemy.hp<=0){ endBattle(true); return; }
+  setTimeout(()=>enemyTurn(), 500);
+  updateBattleUI(); renderBattleCanvas();
+}
+
+function enemyTurn(){
+  if(!battle.active) return;
+  const dmg = Math.floor(battle.enemy.atk*(0.7+Math.random()*.6));
+  battle.player.hp -= dmg;
+  battle.round++;
+  if(battle.player.hp<=0){ battle.player.hp=0; endBattle(false); return; }
+  setLog('👹 '+battle.enemy.name+' attacks! -'+dmg+' HP');
+  updateBattleUI(); renderBattleCanvas();
+}
+
+function endBattle(won){
+  battle.active=false;
+  if(won){
+    const e=ENEMIES[Math.min(currentEnemyIdx,ENEMIES.length-1)];
+    state.coins+=battle.rewards; state.battlesWon++;
+    gainXP(e.xp||30);
+    document.getElementById('win-reward').textContent='+'+battle.rewards+' 🪙   +'+e.xp+' XP';
+    document.getElementById('win-overlay').classList.add('active');
+    checkAchievements(); saveState(); updateUI();
+    if(tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+  } else {
+    state.coins+=10; saveState(); updateUI();
+    document.getElementById('lose-overlay').classList.add('active');
+    if(tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+  }
+}
+
+function nextBattle(){
+  document.getElementById('win-overlay').classList.remove('active');
+  currentEnemyIdx++;
+  initBattle();
+}
+function retryBattle(){
+  document.getElementById('lose-overlay').classList.remove('active');
+  initBattle();
+}
+
+/* ══════════════════════════════════
+   CANVAS BATTLE SCENE
+══════════════════════════════════ */
+let animFrame, particles=[];
+function renderBattleCanvas(){
+  const canvas=document.getElementById('game-canvas');
+  const rect=document.querySelector('#battle-screen .content').getBoundingClientRect();
+  canvas.width=rect.width; canvas.height=rect.height||360;
+  const ctx=canvas.getContext('2d');
+  if(animFrame) cancelAnimationFrame(animFrame);
+  let t=0;
+  function draw(){
+    animFrame=requestAnimationFrame(draw);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const W=canvas.width,H=canvas.height;
+
+    // BG gradient
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#0c0018'); bg.addColorStop(1,'#08001a');
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+    // ground
+    ctx.fillStyle='rgba(80,40,120,.25)'; ctx.fillRect(0,H*.65,W,H*.35);
+    ctx.strokeStyle='rgba(139,43,226,.3)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,H*.65); ctx.lineTo(W,H*.65); ctx.stroke();
+
+    // floating particles
+    if(Math.random()<.08) particles.push({x:Math.random()*W,y:H*.65,vx:(Math.random()-.5)*.5,vy:-(Math.random()*1+.5),life:1,r:Math.random()*3+1,c:`hsl(${270+Math.random()*60},100%,70%)`});
+    particles=particles.filter(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.life-=.015;
+      ctx.globalAlpha=p.life; ctx.fillStyle=p.c;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1; return p.life>0;
+    });
+
+    // PLAYER character (left)
+    const px=W*.22, py=H*.55;
+    const ph=state.level>5?90:70;
+    // body glow
+    ctx.shadowBlur=20; ctx.shadowColor='#00f5ff';
+    ctx.fillStyle='#00c2ff';
+    ctx.beginPath(); ctx.ellipse(px,py,ph*.2,ph*.5,0,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    // head
+    ctx.fillStyle='#5af0ff';
+    ctx.beginPath(); ctx.arc(px,py-ph*.55,ph*.2,0,Math.PI*2); ctx.fill();
+    // weapon swing
+    const ang=Math.sin(t*.05)*0.4-0.3;
+    ctx.save(); ctx.translate(px+ph*.2,py-ph*.2); ctx.rotate(ang);
+    ctx.fillStyle='#ffd700'; ctx.shadowBlur=10; ctx.shadowColor='#ffd700';
+    ctx.fillRect(0,-ph*.6,ph*.08,ph*.7);
+    ctx.fillStyle='#fff'; ctx.fillRect(-ph*.04,-ph*.62,ph*.16,ph*.08);
+    ctx.shadowBlur=0; ctx.restore();
+    // shield
+    ctx.fillStyle='#8B2BE2'; ctx.shadowBlur=8; ctx.shadowColor='#8B2BE2';
+    ctx.beginPath(); ctx.roundRect(px-ph*.35,py-ph*.3,ph*.2,ph*.4,4); ctx.fill();
+    ctx.shadowBlur=0;
+
+    // ENEMY (right)
+    const ex=W*.78, ey=H*.55;
+    const ehp=Math.max(0,battle.enemy.hp)/battle.enemy.maxHp;
+    const eh=70+currentEnemyIdx*8;
+    ctx.shadowBlur=25; ctx.shadowColor='#ff2244';
+    ctx.fillStyle=`hsl(${0+currentEnemyIdx*10},80%,40%)`;
+    ctx.beginPath(); ctx.ellipse(ex,ey,eh*.25+Math.sin(t*.04)*3,eh*.55,0,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    // enemy head
+    ctx.fillStyle=`hsl(${0+currentEnemyIdx*10},70%,30%)`;
+    ctx.beginPath(); ctx.arc(ex,ey-eh*.55,eh*.22+Math.sin(t*.06)*2,0,Math.PI*2); ctx.fill();
+    // eyes glow
+    ctx.fillStyle='#ff4400'; ctx.shadowBlur=8; ctx.shadowColor='#ff4400';
+    [-1,1].forEach(s=>{ ctx.beginPath(); ctx.arc(ex+s*eh*.08,ey-eh*.6,4,0,Math.PI*2); ctx.fill(); });
+    ctx.shadowBlur=0;
+    // horns
+    if(currentEnemyIdx>=2){
+      ctx.fillStyle='#880022'; [-1,1].forEach(s=>{
+        ctx.beginPath(); ctx.moveTo(ex+s*eh*.08,ey-eh*.7); ctx.lineTo(ex+s*eh*.2,ey-eh*.95); ctx.lineTo(ex+s*eh*.12,ey-eh*.72); ctx.fill();
+      });
+    }
+    // health tint overlay on enemy
+    if(ehp<.3){ ctx.fillStyle=`rgba(255,0,0,${.15+Math.sin(t*.1)*.1})`; ctx.beginPath(); ctx.ellipse(ex,ey,eh*.28,eh*.6,0,0,Math.PI*2); ctx.fill(); }
+
+    // VS text
+    ctx.font=`bold ${18}px Orbitron,sans-serif`;
+    ctx.textAlign='center'; ctx.fillStyle='rgba(255,215,0,.5)';
+    ctx.shadowBlur=10; ctx.shadowColor='#ffd700';
+    ctx.fillText('VS',W/2,H*.4);
+    ctx.shadowBlur=0;
+
+    // Emoji label over enemy
+    ctx.font='28px serif'; ctx.textAlign='center';
+    const e2=ENEMIES[Math.min(currentEnemyIdx,ENEMIES.length-1)];
+    ctx.fillText(e2.emoji,ex,ey-eh*.85);
+
+    t++;
+  }
+  draw();
+}
+
+/* ══════════════════════════════════
+   LEADERBOARD (mock)
+══════════════════════════════════ */
+const LEADERBOARD = [
+  {name:'CryptoKing',   emoji:'👑',level:42,score:892400},
+  {name:'ShadowBlade',  emoji:'⚔️',level:38,score:734100},
+  {name:'DragonSlayer', emoji:'🐉',level:35,score:612000},
+  {name:'MysticMage',   emoji:'🔮',level:31,score:488000},
+  {name:'IronFist',     emoji:'🥊',level:28,score:356000},
+  {name:'NightRaven',   emoji:'🦅',level:25,score:290000},
+  {name:'StarForge',    emoji:'⭐',level:22,score:211000},
+  {name:'WarHammer',    emoji:'🔨',level:19,score:155000},
+];
+
+function renderLeaderboard(){
+  const list=document.getElementById('lb-list'); list.innerHTML='';
+  const tgUser=tg?.initDataUnsafe?.user;
+  const myName=tgUser?tgUser.first_name:'You';
+  const myEntry={name:myName,emoji:'🧙',level:state.level,score:state.coins,isMe:true};
+  const all=[...LEADERBOARD,myEntry].sort((a,b)=>b.score-a.score).slice(0,10);
+  all.forEach((u,i)=>{
+    const row=document.createElement('div');
+    row.className='lb-row'+(u.isMe?' me':'');
+    const rankC=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1;
+    row.innerHTML=`
+      <div class="lb-rank ${rankC}">${medal}</div>
+      <div class="lb-avatar">${u.emoji}</div>
+      <div class="lb-info"><div class="lb-name">${u.name}${u.isMe?' (You)':''}</div><div class="lb-level">Level ${u.level}</div></div>
+      <div class="lb-score">🪙 ${u.score.toLocaleString()}</div>`;
+    list.appendChild(row);
+  });
+}
+
+/* ══════════════════════════════════
+   ACHIEVEMENTS
+══════════════════════════════════ */
+const ACHIEVEMENTS=[
+  {id:'first_tap',  name:'First Blood',  icon:'👆', check:()=>state.totalTaps>=1},
+  {id:'tap100',     name:'Tap Master',   icon:'💯', check:()=>state.totalTaps>=100},
+  {id:'coins1k',    name:'Millionaire',  icon:'💰', check:()=>state.coins>=1000},
+  {id:'first_win',  name:'Warrior',      icon:'⚔️', check:()=>state.battlesWon>=1},
+  {id:'win5',       name:'Champion',     icon:'🏆', check:()=>state.battlesWon>=5},
+  {id:'level5',     name:'Veteran',      icon:'⭐', check:()=>state.level>=5},
+  {id:'coins10k',   name:'Tycoon',       icon:'💎', check:()=>state.coins>=10000},
+  {id:'win20',      name:'Legend',       icon:'👑', check:()=>state.battlesWon>=20},
+  {id:'taps1k',     name:'Iron Fingers', icon:'🦾', check:()=>state.totalTaps>=1000},
+];
+
+function checkAchievements(){
+  ACHIEVEMENTS.forEach(a=>{ if(!state.achievements[a.id]&&a.check()){ state.achievements[a.id]=true; spawnFloat(window.innerWidth/2,window.innerHeight/3,'🏅 '+a.name); } });
+}
+function renderAchievements(){
+  const grid=document.getElementById('ach-grid'); grid.innerHTML='';
+  ACHIEVEMENTS.forEach(a=>{
+    const c=document.createElement('div');
+    c.className='ach-card'+(state.achievements[a.id]?' earned':'');
+    c.innerHTML=`<div class="ach-ico">${state.achievements[a.id]?a.icon:'🔒'}</div><div class="ach-name">${a.name}</div>`;
+    grid.appendChild(c);
+  });
+}
+
+/* ══════════════════════════════════
+   SCREEN SWITCHING
+══════════════════════════════════ */
+function showScreen(name, btnId){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(name+'-screen').classList.add('active');
+  document.getElementById(btnId).classList.add('active');
+  if(name==='battle'){ if(!battle.active) initBattle(); else renderBattleCanvas(); }
+  if(name==='leaderboard') renderLeaderboard();
+  if(name==='profile'){ renderAchievements(); updateUI(); }
+  if(animFrame && name!=='battle'){ cancelAnimationFrame(animFrame); animFrame=null; }
+}
+
+/* ══════════════════════════════════
+   BOOT
+══════════════════════════════════ */
+(function init(){
+  updateUI();
+  renderUpgrades();
+  renderLeaderboard();
+  renderAchievements();
+  checkAchievements();
+  // Restore auto mine from upgrades
+  if(state.upgrades['auto1']) startAutoMine(1);
+  if(state.upgrades['auto2']) startAutoMine(5);
+})();
+</script>
+</body>
+</html>
